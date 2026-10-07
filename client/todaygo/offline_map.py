@@ -2,16 +2,16 @@
 
 import json
 from pathlib import Path
-from kivy.graphics import Color, Line, RoundedRectangle, Rectangle
+from kivy.graphics import Color, Line, RoundedRectangle, Rectangle, Ellipse
 from kivy_garden.mapview import MapLayer, MapSource
 from kivy.metrics import dp
-from todaygo.theme import Copy
+from todaygo.theme import Copy, BG, MUTED, CYAN
 
 
 class OfflineSource(MapSource):
     def __init__(self):
         super().__init__(
-            url="offline://moscow", min_zoom=10, max_zoom=16, attribution="Авторская схема Москвы"
+            url="offline://moscow", min_zoom=10, max_zoom=19, attribution="Авторская схема Москвы"
         )
 
     def fill_tile(self, tile):
@@ -22,7 +22,9 @@ class MoscowSchematic(MapLayer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.data = json.loads(
-            (Path(__file__).resolve().parents[1] / "assets/moscow-schematic.json").read_text()
+            (Path(__file__).resolve().parents[1] / "assets/moscow-schematic.json").read_text(
+                encoding="utf-8"
+            )
         )
 
     def reposition(self):
@@ -39,22 +41,26 @@ class MoscowSchematic(MapLayer):
             return [v for p in path for v in xy(p)]
 
         with self.canvas:
-            Color(0.94, 0.95, 0.955, 1)
+            Color(*BG)
             Rectangle(pos=m.pos, size=m.size)
             for park in self.data["parks"]:
                 south, west, north, east = park["bounds"]
                 x, y = xy((south, west))
                 xx, yy = xy((north, east))
-                Color(0.84, 0.90, 0.83, 1)
+                Color(0.09, 0.20, 0.18, 1)
                 RoundedRectangle(pos=(x, y), size=(xx - x, yy - y), radius=[dp(12)])
+                Color(0.21, 0.37, 0.29, 0.6)
+                Line(rounded_rectangle=(x, y, xx - x, yy - y, dp(12)), width=dp(0.8))
             for road in self.data["roads"]:
-                Color(0.83, 0.85, 0.87, 1)
+                Color(0.13, 0.18, 0.25, 1)
                 width = dp(4 if road["kind"] == "ring" else 3 if road["kind"] == "main" else 2)
                 Line(points=points(road["points"]), width=width)
-                Color(1, 1, 1, 1)
+                Color(0.27, 0.33, 0.42, 1)
                 Line(points=points(road["points"]), width=max(1, width - dp(1.2)))
-            Color(0.69, 0.83, 0.93, 1)
+            Color(0.05, 0.21, 0.31, 1)
             Line(points=points(self.data["river"]), width=dp(9), joint="round", cap="round")
+            Color(*CYAN[:3], 0.45)
+            Line(points=points(self.data["river"]), width=dp(1.4), joint="round", cap="round")
         labels = self.data["labels"] + [[p["name"], *p["label"]] for p in self.data["parks"]]
         for title, lat, lon in labels:
             x, y = xy((lat, lon))
@@ -62,7 +68,7 @@ class MoscowSchematic(MapLayer):
                 label = Copy(
                     text=title,
                     size=8 if m.zoom < 13 else 10,
-                    color=(0.43, 0.49, 0.52, 1),
+                    color=MUTED,
                     bold=True,
                     size_hint=(None, None),
                     width=dp(135),
@@ -71,3 +77,9 @@ class MoscowSchematic(MapLayer):
                     pos=(x - dp(67), y - dp(10)),
                 )
                 self.add_widget(label)
+        x, y = xy((55.750, 37.616))
+        with self.canvas:
+            Color(*CYAN[:3], 0.15)
+            Ellipse(pos=(x - dp(12), y - dp(12)), size=(dp(24), dp(24)))
+            Color(*CYAN)
+            Ellipse(pos=(x - dp(3), y - dp(3)), size=(dp(6), dp(6)))

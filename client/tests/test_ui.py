@@ -1,7 +1,9 @@
 import json
 import time
 from kivy.base import EventLoop
+from kivy.core.window import Window
 from todaygo.application import TodayGoApp
+from todaygo.maps import MOSCOW
 from todaygo.theme import Action
 
 
@@ -106,6 +108,21 @@ def test_all_screens_with_real_api(api_server, monkeypatch):
         click(app.screens["profile"], "Выйти из аккаунта")
         settle(app)
         assert app.api.user is None
+        # A supported small window must keep a usable map and reachable controls.
+        Window.size = (360, 700)
+        settle(app, 0.6)
+        home = app.screens["home"]
+        assert home.map_panel.map.height >= 220
+        assert abs(home.map_panel.map.lat - MOSCOW[0]) < 0.001
+        assert abs(home.map_panel.map.lon - MOSCOW[1]) < 0.001
+        assert home.cards_scroll.disabled
+        for button in (home.map_panel.retry_button, home.map_panel.focus_button):
+            assert home.map_panel.y <= button.y < button.top <= home.map_panel.top
+        Window.size = (480, 960)
+        settle(app, 0.6)
+        assert not home.cards_scroll.disabled
+        assert home.map_panel.map.height >= 220
+        assert abs(home.map_panel.map.lat - MOSCOW[0]) < 0.001
     finally:
         EventLoop.window.remove_widget(app.root)
         app.on_stop()

@@ -5,7 +5,7 @@ package.domain = ru.todaygo
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,json,txt
 source.exclude_dirs = tests,.buildozer,bin,__pycache__
-version = 1.0.0
+version = 1.1.0
 requirements = python3,kivy==2.3.1,kivy_garden.mapview==1.0.6,requests==2.32.5,certifi,openssl,pyjnius
 orientation = portrait
 fullscreen = 0

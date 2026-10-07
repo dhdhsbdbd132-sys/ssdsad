@@ -12,7 +12,7 @@ flowchart LR
     Repos --> DB[(SQLite / PostgreSQL)]
     Services --> Mail[Почта / SMTP]
     Services --> OIDC[Google OIDC]
-    UI --> Map[CARTO / OpenStreetMap]
+    UI --> Map[OpenStreetMap / HOT]
 ```
 
 ## Разделение ответственности
