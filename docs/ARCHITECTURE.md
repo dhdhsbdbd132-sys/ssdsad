@@ -1,0 +1,74 @@
+# Архитектура «Сегодня идём»
+
+Модульный монолит соответствует описанию во вложении «на 16.09.docx». Предметная область — локальные мероприятия Москвы, пользователи и участие. Kivy-клиент независим от БД и серверных моделей.
+
+```mermaid
+flowchart LR
+    UI[Экраны Kivy] --> HTTP[ApiClient / JSON HTTP]
+    HTTP --> Routes[FastAPI маршруты]
+    Routes --> Schemas[Pydantic схемы]
+    Routes --> Services[Auth / Events / Users / OAuth services]
+    Services --> Repos[Репозитории / Session / select]
+    Repos --> DB[(SQLite / PostgreSQL)]
+    Services --> Mail[Почта / SMTP]
+    Services --> OIDC[Google OIDC]
+    UI --> Map[CARTO / OpenStreetMap]
+```
+
+## Разделение ответственности
+
+- UI собирает данные, показывает ошибки и управляет навигацией. Не проверяет права вместо сервера и не исполняет SQL.
+- `ApiClient` выполняет запросы, обрабатывает HTTP-коды, обновляет токены. Запросы идут в фоновом потоке, обновление интерфейса — через Kivy Clock.
+- FastAPI-маршруты принимают и возвращают схемы, извлекают текущего пользователя и вызывают сервисы.
+- Сервисы содержат правила: авторство, роли, вместимость, даты, одноразовые коды, сессии и транзакции.
+- Репозитории читают ORM-объекты через `select`, `Session` и отношения.
+- Модели описывают структуру хранения и ограничения; Alembic управляет версией схемы.
+- `core` содержит инфраструктуру: настройки, подключение, хеширование и нормализацию ошибок.
+
+В бизнес-логике нет прямого SQL. `PRAGMA foreign_keys=ON` используется только в адаптере SQLite для включения ограничений. DDL в миграциях создаёт структуру, а не заменяет ORM-CRUD.
+
+## База данных
+
+```mermaid
+erDiagram
+    USERS ||--o{ EVENTS : author
+    USERS ||--o{ PARTICIPATIONS : participates
+    EVENTS ||--o{ PARTICIPATIONS : includes
+    USERS ||--o{ CHALLENGES : verifies
+    USERS ||--o{ REFRESH_SESSIONS : authenticates
+    USERS ||--o{ AUDIT_LOGS : acts
+    USERS {
+      int id PK
+      string name
+      string email UK
+      string password_hash
+      string role
+      boolean active
+    }
+    EVENTS {
+      int id PK
+      int author_id FK
+      string title
+      string category
+      datetime starts_at
+      float latitude
+      float longitude
+      int capacity
+      int attendees
+      int version
+    }
+    PARTICIPATIONS {
+      int id PK
+      int user_id FK
+      int event_id FK
+      datetime created_at
+    }
+```
+
+`users` ↔ `events` — N:M через `participations`; уникальность пары запрещает повторное участие. Автор ↔ мероприятия — 1:N. Удаление мероприятия каскадно удаляет участие, сохраняя пользователей и аудит.
+
+Дополнительные таблицы: `challenges` (HMAC кода, попытки, срок и признак использования), `refresh_sessions` (хеш токена, семейство, срок, использование и отзыв), `oauth_attempts` (PKCE, nonce, срок, одноразовый обмен), `audit_logs` (кто, что, объект, дата).
+
+Каждый запрос получает собственный `Session`. Успешная бизнес-операция заканчивается `commit`. При ошибке зависимость откатывает `rollback`. Версионные столбцы SQLAlchemy предотвращают потерянные обновления при одновременном участии, использовании кода и обновлении токена. Конфликт возвращает 409; клиент может повторить действие после обновления данных.
+
+Даты хранятся в UTC; API возвращает timezone-aware ISO 8601, UI показывает UTC+3. Запросы с датой без часового пояса отклоняются. Локальная БД SQLite не требует отдельного сервера; production использует PostgreSQL. Миграция проверена применением и откатом на обеих СУБД.

@@ -1,0 +1,11 @@
+.git
+.venv
+.client-venv
+.data
+.env
+.env.*
+__pycache__
+.pytest_cache
+client
+backend/tests
+docs

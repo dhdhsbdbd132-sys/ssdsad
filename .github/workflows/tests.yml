@@ -1,0 +1,22 @@
+name: API and Kivy tests
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dri libegl1 libgles2 xvfb xclip
+          bash scripts/setup.sh
+      - run: .venv/bin/pytest backend/tests -q
+      - run: xvfb-run -a .client-venv/bin/pytest client/tests -q
+        env:
+          TODAYGO_MAP_MODE: offline
+          KIVY_NO_ARGS: '1'
+          KIVY_HOME: ${{ github.workspace }}/.data/kivy

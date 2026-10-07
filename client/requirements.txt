@@ -1,0 +1,4 @@
+Kivy==2.3.1
+kivy_garden.mapview==1.0.6
+requests==2.32.5
+certifi==2026.7.22
