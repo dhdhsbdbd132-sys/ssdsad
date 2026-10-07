@@ -20,14 +20,15 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Android toolchain cache
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+        id: android-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809
         with:
           path: |
             ~/.buildozer/android/platform
             ~/.gradle/caches
             ~/.gradle/wrapper
             client/.buildozer/android/platform
-          key: android-arm64-p4a-2026-05-09-${{ runner.os }}-${{ hashFiles('client/buildozer.spec') }}
+          key: android-arm64-p4a-2026-05-09-grpfix-${{ runner.os }}-${{ hashFiles('client/buildozer.spec', 'client/android-recipes/**') }}
       - name: Native build tools
         shell: bash
         run: |
@@ -64,3 +65,13 @@ jobs:
           name: android-build-log
           path: .data/android-build.log
           if-no-files-found: ignore
+      - name: Save Android toolchain cache
+        if: always() && steps.android-cache.outputs.cache-hit != 'true' && steps.android-cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809
+        with:
+          path: |
+            ~/.buildozer/android/platform
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            client/.buildozer/android/platform
+          key: ${{ steps.android-cache.outputs.cache-primary-key }}
