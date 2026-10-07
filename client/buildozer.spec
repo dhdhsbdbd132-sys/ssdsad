@@ -7,7 +7,7 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,json,txt
 source.exclude_dirs = tests,android-recipes,.buildozer,bin,__pycache__
 version = 1.2.0
 android.numeric_version = 120
-requirements = python3==3.12.14,hostpython3==3.12.14,kivy==2.3.1,kivy_garden.mapview==1.0.6,requests==2.32.5,certifi,openssl,pyjnius
+requirements = python3==3.12.14,hostpython3==3.12.14,kivy==2.3.1,kivy_garden.mapview==1.0.6,requests==2.32.5,chardet==5.2.0,charset-normalizer==3.5.2,certifi,openssl,pyjnius
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET,ACCESS_NETWORK_STATE

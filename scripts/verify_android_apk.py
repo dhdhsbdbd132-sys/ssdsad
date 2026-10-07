@@ -7,9 +7,12 @@ import io
 import os
 from pathlib import Path
 import re
+import shutil
+import struct
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zipfile
 
 
@@ -30,6 +33,46 @@ def find_android_tool(name: str) -> Path:
 
 
 def verify(apk: Path) -> None:
+    native_count = 0
+    readelf = shutil.which("readelf")
+    if not readelf:
+        raise RuntimeError("Install binutils/readelf to verify Android library dependencies")
+
+    def check_elf(name: str, data: bytes):
+        nonlocal native_count
+        if (
+            data[:6] != b"\x7fELF\x02\x01"
+            or len(data) < 20
+            or struct.unpack("<H", data[18:20])[0] != 183
+        ):
+            raise RuntimeError(f"Expected ARM64 ELF library, found another architecture: {name}")
+        with tempfile.TemporaryDirectory(prefix="todaygo-elf-") as temporary:
+            library = Path(temporary) / "library.so"
+            library.write_bytes(data)
+            metadata = subprocess.run(
+                [readelf, "--wide", "--dynamic", "--version-info", str(library)],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        forbidden = {
+            "libc.so.6",
+            "libm.so.6",
+            "libdl.so.2",
+            "libpthread.so.0",
+            "librt.so.1",
+            "libresolv.so.2",
+            "libutil.so.1",
+            "libstdc++.so.6",
+            "libgcc_s.so.1",
+            "ld-linux-aarch64.so.1",
+            "ld-linux-x86-64.so.2",
+        }
+        needed = re.findall(r"\(NEEDED\).*?\[(.*?)\]", metadata)
+        if forbidden.intersection(needed) or "GLIBC_" in metadata or "GLIBCXX_" in metadata:
+            raise RuntimeError(f"GNU/Linux library cannot run on Android: {name}")
+        native_count += 1
+
     with zipfile.ZipFile(apk) as archive:
         bad_member = archive.testzip()
         if bad_member:
@@ -39,6 +82,23 @@ def verify(apk: Path) -> None:
             raise RuntimeError("APK manifest is missing")
         if "lib/arm64-v8a/libmain.so" not in names:
             raise RuntimeError("ARM64 application library is missing")
+        bundle_name = "lib/arm64-v8a/libpybundle.so"
+        for name in names:
+            if name.endswith(".so") and name != bundle_name:
+                with archive.open(name) as library:
+                    check_elf(name, library.read())
+        if bundle_name not in names:
+            raise RuntimeError("Python dependency bundle is missing")
+        with tarfile.open(fileobj=io.BytesIO(archive.read(bundle_name)), mode="r:*") as bundle:
+            bundled = bundle.getmembers()
+            for member in bundled:
+                if member.isfile() and member.name.endswith(".so"):
+                    with bundle.extractfile(member) as library:
+                        check_elf(member.name, library.read())
+            dependency_names = [member.name for member in bundled]
+            for dependency in ("certifi/cacert.pem", "requests/", "kivy_garden/mapview/"):
+                if not any(dependency in name for name in dependency_names):
+                    raise RuntimeError(f"Required Android dependency is missing: {dependency}")
         if "assets/private.tar" not in names:
             raise RuntimeError("Application package is missing")
         with tarfile.open(
@@ -68,6 +128,7 @@ def verify(apk: Path) -> None:
         if declaration not in metadata:
             raise RuntimeError(f"Required APK metadata is missing: {declaration}")
     print(f"Verified {apk.name}: ARM64, Android 7+, target API 35, valid debug signature")
+    print(f"Verified architecture of {native_count} native libraries and extensions")
     print(f"SHA256: {hashlib.sha256(apk.read_bytes()).hexdigest()}")
 
 

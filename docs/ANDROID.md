@@ -38,19 +38,21 @@ Workflow использует Ubuntu 22.04, Python 3.12 для сборочны�
 
 Локальный рецепт Python сохраняет совместимость с Android 7: исключает необязательный Unix-модуль `grp`, который в CPython3.12 без проверки вызывает функции перечисления групп, доступные Android только с API26. Приложение этот модуль не использует. Остальная сборка и патчи используются из зафиксированного upstream-рецепта. SDK, NDK и результаты компиляции кэшируются также после неудачной сборки, чтобы повтор не скачивал весь toolchain заново.
 
-Перед загрузкой APK автоматическая проверка читает структуру ZIP и пакета приложения, проверяет ARM64-библиотеку, русский шрифт, новые модули анимации, package/version/API/INTERNET и цифровую debug-подпись через `apksigner`. Проверка установленного приложения на физическом телефоне выполняется отдельно.
+`scripts/build_android.py` собирает `charset-normalizer` из исходников с отключённым необязательным mypy-ускорителем. `chardet` зафиксирован на чистой Python-версии 5.2.0. Так Linux-расширения зависимостей не попадают в Android-пакет.
+
+Перед загрузкой APK автоматическая проверка читает структуру ZIP и пакета приложения, проверяет архитектуру всех native-библиотек и расширений внутри Python bundle, отсутствие GNU/Linux-зависимостей и GLIBC-версий, русский шрифт, новые модули анимации, package/version/API/INTERNET и цифровую debug-подпись через `apksigner`. Дополнительно проверяются requests, mapview и CA-сертификаты certifi. Проверка установленного приложения на физическом телефоне выполняется отдельно.
 
 ## Сборка вручную: Ubuntu 22.04 или WSL2
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf automake libtool \
+sudo apt-get install -y build-essential git zip unzip openjdk-17-jdk autoconf automake libtool \
   pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake \
   libffi-dev libssl-dev
 python3.12 -m venv .android-venv
 .android-venv/bin/pip install buildozer==1.6.0 Cython==0.29.37 setuptools==82.0.1
 cd client
-../.android-venv/bin/buildozer android debug
+../.android-venv/bin/python ../scripts/build_android.py
 ../.android-venv/bin/python ../scripts/verify_android_apk.py bin
 ```
 
