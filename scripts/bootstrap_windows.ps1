@@ -70,7 +70,11 @@ try {
             if (Test-Path -LiteralPath $installer) { Remove-Item -LiteralPath $installer }
         }
     }
-    & $python -X utf8 (Join-Path $project 'scripts\launch_windows.py')
+    $launchArguments = @('-X', 'utf8', (Join-Path $project 'scripts\launch_windows.py'))
+    if ($env:TODAYGO_ANDROID_SERVER -eq '1') {
+        $launchArguments += '--android-server'
+    }
+    & $python @launchArguments
     exit $LASTEXITCODE
 } catch {
     Write-Host ('Error: ' + $_.Exception.Message) -ForegroundColor Red

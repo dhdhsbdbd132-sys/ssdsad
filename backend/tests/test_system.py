@@ -55,12 +55,6 @@ def test_production_rejects_insecure_settings():
         Settings(environment="production", secret_key="s" * 64, mail_backend="file")
 
 
-def test_unconfigured_oauth_returns_actionable_error(client):
-    r = client.get("/api/auth/oauth/start")
-    assert r.status_code == 503
-    assert "OAuth" in r.json()["error"]
-
-
 def test_chunked_body_limit(client):
     response = client.post("/api/auth/login", content=iter([b"x" * 40000, b"y" * 40000]))
     assert response.status_code == 413

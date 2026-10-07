@@ -22,8 +22,8 @@ def create_app(settings=None):
     settings = settings or Settings()
     app = FastAPI(
         title="Сегодня идём — API",
-        version="1.0.0",
-        description="Мероприятия Москвы, участие, OAuth2/OIDC и почтовая 2FA. Все данные клиентов передаются через API.",
+        version="1.2.0",
+        description="Мероприятия Москвы, участие, пароль и почтовая 2FA. Все данные клиентов передаются через API.",
     )
     app.state.settings, app.state.db, app.state.mailer = (
         settings,

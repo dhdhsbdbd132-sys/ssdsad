@@ -43,7 +43,7 @@ class Login(Schema):
 class ChallengeOut(Schema):
     challenge_id: str
     expires_in: int = 600
-    delivery: Literal["email"] = "email"
+    delivery: Literal["email", "development_file"] = "email"
 
 
 class Verify(Schema):
@@ -147,14 +147,3 @@ class ErrorResponse(BaseModel):
     error: str
     request_id: str | None = None
     details: list[dict] | None = None
-
-
-class OAuthStart(Schema):
-    authorization_url: str
-    state: str
-    poll_key: str
-
-
-class OAuthPoll(Schema):
-    state: str = Field(min_length=20, max_length=64)
-    poll_key: str = Field(min_length=32, max_length=128)

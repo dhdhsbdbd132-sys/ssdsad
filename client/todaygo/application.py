@@ -1,6 +1,5 @@
 import json
 import os
-import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from kivy.animation import Animation
@@ -10,13 +9,15 @@ from kivy.core.window import Window
 from kivy.metrics import dp
 from kivy.uix.screenmanager import ScreenManager, FadeTransition, NoTransition
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, RoundedRectangle
 from kivy.properties import BooleanProperty, NumericProperty
 from kivy.utils import platform
 from todaygo.api import ApiClient, ApiError
+from todaygo.ambient import AmbientBackdrop
 from todaygo.motion import reduced_motion
-from todaygo.theme import Paragraph, Action, BG, BLUE, Hero
+from todaygo.theme import Paragraph, Action, BG, BLUE
 from todaygo.screens import (
     HomeScreen,
     ListScreen,
@@ -26,6 +27,7 @@ from todaygo.screens import (
     VerifyScreen,
     ProfileScreen,
     AdminScreen,
+    ConnectionScreen,
     styled_popup,
 )
 
@@ -80,17 +82,29 @@ class TodayGoApp(App):
         self._stopping = False
         self.busy = False
         self.events = []
-        self.poll_event = None
         self.map_offline = os.environ.get("TODAYGO_MAP_MODE") == "offline"
         config = Path(self.user_data_dir) / "settings.json"
-        base = "http://127.0.0.1:8000"
+        saved = {}
         if config.exists():
             try:
-                base = json.loads(config.read_text()).get("api_url", base)
+                saved = json.loads(config.read_text(encoding="utf-8"))
+                if not isinstance(saved, dict):
+                    saved = {}
             except (ValueError, OSError):
                 pass
-        self.api = ApiClient(os.environ.get("TODAYGO_API_URL", base))
-        root = BoxLayout(orientation="vertical")
+        base = os.environ.get("TODAYGO_API_URL", saved.get("api_url", "http://127.0.0.1:8000"))
+        needs_connection = platform == "android" and not (
+            saved.get("api_url") or os.environ.get("TODAYGO_API_URL")
+        )
+        try:
+            self.api = ApiClient(base, allow_private_http=saved.get("allow_private_http", False))
+        except ApiError:
+            self.api = ApiClient()
+            needs_connection = True
+        root = FloatLayout()
+        self.backdrop = AmbientBackdrop()
+        root.add_widget(self.backdrop)
+        content = BoxLayout(orientation="vertical")
         self.manager = ScreenManager(
             transition=NoTransition() if reduced_motion() else FadeTransition(duration=0.20)
         )
@@ -104,15 +118,19 @@ class TodayGoApp(App):
             ("verify", VerifyScreen),
             ("profile", ProfileScreen),
             ("admin", AdminScreen),
+            ("connect", ConnectionScreen),
         ]:
             screen = cls(app=self, name=key)
             self.screens[key] = screen
             self.manager.add_widget(screen)
-        root.add_widget(self.manager)
+        content.add_widget(self.manager)
         self.status = LoadingStrip(size_hint_y=None, height=dp(3))
-        root.add_widget(self.status)
+        content.add_widget(self.status)
+        root.add_widget(content)
         Window.bind(on_keyboard=self.key)
-        self._start_event = Clock.schedule_once(lambda _: self.go_home(), 0.1)
+        self._start_event = Clock.schedule_once(
+            lambda _: self.go_connect() if needs_connection else self.go_home(), 0.1
+        )
         return root
 
     def run_api(self, fn, callback):
@@ -213,6 +231,33 @@ class TodayGoApp(App):
         self.screens["profile"].build()
         self.switch("profile")
 
+    def go_connect(self):
+        self.screens["connect"].build()
+        self.switch("connect")
+
+    def connect_server(self, url, allow_private_http=False):
+        if self.api.user:
+            self.notice("Сначала выйдите из аккаунта")
+            return
+        try:
+            candidate = ApiClient(url, allow_private_http=allow_private_http)
+        except ApiError as exc:
+            self.notice(str(exc))
+            return
+
+        def check():
+            if candidate.request("GET", "/health") != {"status": "ok"}:
+                raise ApiError("По этому адресу не найден сервер «Сегодня идём»")
+            return candidate
+
+        def connected(api):
+            self.api.session.close()
+            self.api = api
+            self.save_server()
+            self.go_home()
+
+        self.run_api(check, connected)
+
     def go_admin(self):
         self.run_api(
             lambda: self.api.request("GET", "/admin/users"),
@@ -224,93 +269,29 @@ class TodayGoApp(App):
 
     def save_server(self):
         (Path(self.user_data_dir) / "settings.json").write_text(
-            json.dumps({"api_url": self.api.base_url})
-        )
-
-    def oauth_login(self):
-        self.run_api(lambda: self.api.request("GET", "/auth/oauth/start"), self.oauth_started)
-
-    def oauth_started(self, data):
-        if self.poll_event:
-            self.poll_event.cancel()
-        self.oauth = data
-        self.poll_count = 0
-        if platform == "android":
-            from jnius import autoclass
-
-            Intent = autoclass("android.content.Intent")
-            Uri = autoclass("android.net.Uri")
-            activity = autoclass("org.kivy.android.PythonActivity").mActivity
-            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(data["authorization_url"])))
-        else:
-            webbrowser.open(data["authorization_url"])
-        # A dedicated wait screen makes browser return behavior visible and cancellable.
-        screen = self.screens["verify"]
-        screen.reset()
-        screen.header("Вход через Google")
-        from todaygo.screens import scroll_column
-
-        scroll, column = scroll_column()
-        screen.layout.add_widget(scroll)
-        column.add_widget(
-            Hero(
-                "До встречи\nв приложении.",
-                "Завершите вход в браузере, затем вернитесь сюда.",
-                eyebrow="ВХОД ЧЕРЕЗ GOOGLE",
-                category="culture",
-                height=230,
-            )
-        )
-        column.add_widget(Action("Отмена", self.cancel_oauth, secondary=True))
-        self.switch("verify")
-        self.poll_event = Clock.schedule_interval(self.oauth_poll, 5)
-
-    def cancel_oauth(self):
-        if self.poll_event:
-            self.poll_event.cancel()
-            self.poll_event = None
-        self.go_auth()
-
-    def oauth_poll(self, _):
-        if self.busy:
-            return
-        self.poll_count += 1
-        if self.poll_count > 110:
-            self.cancel_oauth()
-            self.notice("Время OAuth-входа истекло")
-            return
-        self.run_api(
-            lambda: self.api.request(
-                "POST",
-                "/auth/oauth/poll",
-                {"state": self.oauth["state"], "poll_key": self.oauth["poll_key"]},
+            json.dumps(
+                {"api_url": self.api.base_url, "allow_private_http": self.api.allow_private_http}
             ),
-            self.oauth_polled,
+            encoding="utf-8",
         )
-
-    def oauth_polled(self, data):
-        if data["status"] == "complete":
-            self.poll_event.cancel()
-            self.poll_event = None
-            self.go_verify(data)
 
     def key(self, window, key, *_):
         if key == 27 and self.manager.current != "home":
-            if self.poll_event:
-                self.poll_event.cancel()
-                self.poll_event = None
             self.go_home()
             return True
         return False
 
     def on_pause(self):
+        self.backdrop.set_active(False)
         return True
+
+    def on_resume(self):
+        self.backdrop.set_active(True)
 
     def on_stop(self):
         self._stopping = True
         self._start_event.cancel()
-        if self.poll_event:
-            self.poll_event.cancel()
+        self.backdrop.dispose()
         self.api.clear_tokens()
         self.status.active = False
         Window.unbind(on_keyboard=self.key)

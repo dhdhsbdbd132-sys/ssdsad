@@ -7,11 +7,10 @@ flowchart LR
     UI[Экраны Kivy] --> HTTP[ApiClient / JSON HTTP]
     HTTP --> Routes[FastAPI маршруты]
     Routes --> Schemas[Pydantic схемы]
-    Routes --> Services[Auth / Events / Users / OAuth services]
+    Routes --> Services[Auth / Events / Users services]
     Services --> Repos[Репозитории / Session / select]
     Repos --> DB[(SQLite / PostgreSQL)]
     Services --> Mail[Почта / SMTP]
-    Services --> OIDC[Google OIDC]
     UI --> Map[OpenStreetMap / HOT]
 ```
 
@@ -67,7 +66,7 @@ erDiagram
 
 `users` ↔ `events` — N:M через `participations`; уникальность пары запрещает повторное участие. Автор ↔ мероприятия — 1:N. Удаление мероприятия каскадно удаляет участие, сохраняя пользователей и аудит.
 
-Дополнительные таблицы: `challenges` (HMAC кода, попытки, срок и признак использования), `refresh_sessions` (хеш токена, семейство, срок, использование и отзыв), `oauth_attempts` (PKCE, nonce, срок, одноразовый обмен), `audit_logs` (кто, что, объект, дата).
+Дополнительные таблицы: `challenges` (HMAC кода, попытки, срок и признак использования), `refresh_sessions` (хеш токена, семейство, срок, использование и отзыв), `audit_logs` (кто, что, объект, дата). Историческая таблица `oauth_attempts` сохранена для совместимости ранее созданных БД; после удаления Google-входа она не используется.
 
 Каждый запрос получает собственный `Session`. Успешная бизнес-операция заканчивается `commit`. При ошибке зависимость откатывает `rollback`. Версионные столбцы SQLAlchemy предотвращают потерянные обновления при одновременном участии, использовании кода и обновлении токена. Конфликт возвращает 409; клиент может повторить действие после обновления данных.
 

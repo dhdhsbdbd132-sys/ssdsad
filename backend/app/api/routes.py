@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, Query, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from app.api.deps import get_db, auth_service, optional_identity, identity, current_user, admin
 from app.schemas import (
@@ -17,12 +16,9 @@ from app.schemas import (
     EventPage,
     Category,
     RoleUpdate,
-    OAuthStart,
-    OAuthPoll,
     ErrorResponse,
 )
 from app.services.events import EventService
-from app.services.oauth import OAuthService
 from app.services.users import UserService
 from app.repositories.store import Users
 from app.core.errors import AppError
@@ -103,31 +99,6 @@ def logout(value=Depends(identity), service=Depends(auth_service)):
 @router.get("/auth/me", response_model=UserOut, tags=["Авторизация"])
 def me(user=Depends(current_user)):
     return user
-
-
-@router.get("/auth/oauth/start", response_model=OAuthStart, tags=["OAuth"])
-def oauth_start(request: Request, db=Depends(get_db)):
-    return OAuthService(db, request.app.state.settings, request.app.state.mailer).start()
-
-
-@router.get("/auth/oauth/callback", response_class=HTMLResponse, tags=["OAuth"])
-def oauth_callback(
-    request: Request,
-    state: str = Query(max_length=64),
-    code: str = Query(max_length=2048),
-    db=Depends(get_db),
-):
-    OAuthService(db, request.app.state.settings, request.app.state.mailer).callback(state, code)
-    return HTMLResponse(
-        '<html lang="ru"><meta charset="utf-8"><title>Сегодня идём</title><h1>Вход подтверждён</h1><p>Вернитесь в приложение и введите код из письма.</p></html>'
-    )
-
-
-@router.post("/auth/oauth/poll", tags=["OAuth"])
-def oauth_poll(data: OAuthPoll, request: Request, db=Depends(get_db)):
-    return OAuthService(db, request.app.state.settings, request.app.state.mailer).poll(
-        data.state, data.poll_key
-    )
 
 
 @router.get("/events", response_model=EventPage, tags=["Мероприятия"])

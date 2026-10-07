@@ -6,6 +6,7 @@ from kivy.uix.checkbox import CheckBox
 from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
+from kivy.utils import platform
 
 from todaygo.maps import MOSCOW, EventPin, MapPanel
 from todaygo.motion import enter
@@ -102,7 +103,7 @@ class BaseScreen(Screen):
     def __init__(self, app, **kwargs):
         super().__init__(**kwargs)
         self.app = app
-        self.layout = Panel(fill=BG, radius=0, orientation="vertical")
+        self.layout = Panel(fill=(0, 0, 0, 0), radius=0, orientation="vertical")
         self.add_widget(self.layout)
 
     def reset(self):
@@ -713,8 +714,6 @@ class AuthScreen(BaseScreen):
                 secondary=True,
             )
         )
-        if mode == "login":
-            card.add_widget(Action("Войти через Google", self.app.oauth_login, secondary=True))
         column.add_widget(
             Paragraph(
                 text="Вход защищён паролем и одноразовым кодом подтверждения.", size=11, color=MUTED
@@ -745,13 +744,15 @@ class AuthScreen(BaseScreen):
 class VerifyScreen(BaseScreen):
     def build(self, data):
         self.challenge = data["challenge_id"]
+        self.delivery = data.get("delivery", "email")
+        local_code = self.delivery == "development_file"
         self.reset()
         self.header("Подтвердите вход")
         scroll, column = scroll_column(18)
         self.layout.add_widget(scroll)
         column.add_widget(
             Hero(
-                "Письмо уже\nна пути.",
+                "Подтвердите\nсвой вход." if local_code else "Ещё один шаг\nк новым встречам.",
                 "Остался один шаг до новых встреч.",
                 eyebrow="БЕЗОПАСНЫЙ ВХОД",
                 category="education",
@@ -759,7 +760,27 @@ class VerifyScreen(BaseScreen):
             )
         )
         card = form_card(16)
-        card.add_widget(section("Проверьте почту"))
+        card.add_widget(section("Код сохранён локально" if local_code else "Проверьте почту"))
+        if local_code:
+            card.add_widget(
+                Paragraph(
+                    text=(
+                        "Сейчас включён режим разработки: письма не отправляются. "
+                        "Откройте READ_CODE_WINDOWS.bat в папке проекта и найдите код для своей "
+                        "почты. Чтобы включить отправку писем, запустите CONFIGURE_EMAIL_WINDOWS.bat."
+                    ),
+                    size=11,
+                    color=MUTED,
+                )
+            )
+        else:
+            card.add_widget(
+                Paragraph(
+                    text="Проверьте входящие письма и папку «Спам». Если письма нет, вернитесь к входу и запросите новый код.",
+                    size=11,
+                    color=MUTED,
+                )
+            )
         card.add_widget(
             Paragraph(
                 text="Введите шестизначный код подтверждения. Он действует 10 минут.", color=MUTED
@@ -784,6 +805,60 @@ class VerifyScreen(BaseScreen):
             lambda: self.app.api.verify(self.challenge, self.code.text.strip()),
             lambda _: self.app.go_home(),
         )
+
+
+class ConnectionScreen(BaseScreen):
+    def build(self):
+        self.reset()
+        self.header("Подключить приложение", back=False)
+        scroll, column = scroll_column(18)
+        self.layout.add_widget(scroll)
+        column.add_widget(
+            Hero(
+                "Москва\nв вашем кармане.",
+                "Одна афиша — на компьютере и телефоне.",
+                eyebrow="СЕГОДНЯ ИДЁМ / ПОДКЛЮЧЕНИЕ",
+                category="community",
+                height=208,
+            )
+        )
+        card = form_card(14)
+        card.add_widget(section("Адрес сервера", "Подключите телефон и ПК к одной сети Wi-Fi."))
+        card.add_widget(
+            Paragraph(
+                text=(
+                    "На компьютере откройте START_ANDROID_SERVER_WINDOWS.bat. "
+                    "В этом окне появится адрес — введите его ниже. Компьютер должен оставаться включённым."
+                ),
+                size=11,
+                color=MUTED,
+            )
+        )
+        current = self.app.api.base_url
+        if platform == "android" and current.startswith(("http://127.0.0.1", "http://localhost")):
+            current = ""
+        self.server = labeled_field(
+            card, "Адрес из окна на ПК", "http://192.168.1.20:8000", text=current
+        )
+        row = BoxLayout(size_hint_y=None, height=dp(46))
+        self.lan = CheckBox(
+            size_hint_x=None, width=dp(36), color=BLUE, active=self.app.api.allow_private_http
+        )
+        row.add_widget(self.lan)
+        row.add_widget(Copy(text="Сервер на моём ПК через Wi-Fi", size=11, height=46))
+        card.add_widget(row)
+        card.add_widget(Action("Проверить и подключиться", self.submit))
+        card.add_widget(
+            Paragraph(
+                text="Для опубликованного сервера используйте его HTTPS-адрес.",
+                size=10,
+                color=MUTED,
+            )
+        )
+        column.add_widget(card)
+
+    def submit(self):
+        self.app.connect_server(self.server.text, allow_private_http=self.lan.active)
 
 
 class ProfileScreen(BaseScreen):
@@ -836,30 +911,17 @@ class ProfileScreen(BaseScreen):
             column.add_widget(Action("Войти или зарегистрироваться", self.app.go_auth))
         connection = form_card()
         connection.add_widget(section("Подключение", "Адрес сервера для этого устройства."))
-        self.server = Field("https://api.example.com", text=self.app.api.base_url)
-        connection.add_widget(self.server)
-        connection.add_widget(Action("Сохранить адрес API", self.set_server, secondary=True))
+        connection.add_widget(Paragraph(text=self.app.api.base_url, size=11, color=MUTED))
+        connection.add_widget(
+            Action("Подключить другой сервер", self.app.go_connect, secondary=True)
+        )
         column.add_widget(connection)
         column.add_widget(
             Paragraph(
-                text="Сегодня идём · 1.1\nМероприятия, люди и любимый город.", size=11, color=MUTED
+                text="Сегодня идём · 1.2\nМероприятия, люди и любимый город.", size=11, color=MUTED
             )
         )
         self.nav("profile")
-
-    def set_server(self):
-        from todaygo.api import ApiClient, ApiError
-
-        if self.app.api.user:
-            self.app.notice("Сначала выйдите из аккаунта")
-            return
-        try:
-            self.app.api = ApiClient(self.server.text)
-        except ApiError as exc:
-            self.app.notice(str(exc))
-            return
-        self.app.save_server()
-        self.app.go_home()
 
 
 class AdminScreen(BaseScreen):

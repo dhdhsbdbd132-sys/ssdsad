@@ -20,7 +20,7 @@
 | Session / select / ForeignKey / relationship | ORM-репозитории, связи и каскады |
 | CRUD / commit / rollback | Сервисы и зависимость с транзакцией на запрос |
 | Разделение архитектуры | UI → HTTP → API → services → repositories → ORM |
-| OAuth | OAuth2 endpoint + внешняя Google OIDC/PKCE интеграция |
+| OAuth | OAuth2 token endpoint для Swagger; вход через Google удалён по запросу пользователя |
 | Почтовая 2FA | HMAC кода, TTL, лимит попыток, SMTP и development mailbox |
 | Сложная ролевая модель | 4 роли, авторство, server-side права, администрирование |
 | Refresh token | Хеширование, ротация, TTL, replay detection, logout |
@@ -35,4 +35,4 @@
 
 ## Что требует внешней настройки
 
-Настоящая доставка почты — SMTP. Настоящий Google-вход — собственный OAuth client. Детальная онлайн-карта — доступ к OpenStreetMap или резервному HOT / OSM France без ключей; офлайн-схема остаётся доступной без сети. Android APK — запуск сборки и тестирование на устройстве. Production-инфраструктура — развёртывание, DNS, TLS, секреты и резервные копии.
+Настоящая доставка почты — SMTP; для Mail.ru есть локальный Windows-мастер с паролем внешнего приложения. Детальная онлайн-карта — доступ к OpenStreetMap или резервному HOT / OSM France без ключей; офлайн-схема остаётся доступной без сети. Android APK — сборка и проверка на устройстве, см. [Android](ANDROID.md). Production-инфраструктура — развёртывание, DNS, TLS, секреты и резервные копии.

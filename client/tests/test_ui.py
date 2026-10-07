@@ -1,10 +1,48 @@
 import json
 import time
+import pytest
 from kivy.base import EventLoop
 from kivy.core.window import Window
 from todaygo.application import TodayGoApp
 from todaygo.maps import MOSCOW
 from todaygo.theme import Action
+from todaygo.screens import AuthScreen, VerifyScreen
+
+
+class AuthOnlyApp:
+    def go_home(self):
+        pass
+
+    def go_auth(self):
+        pass
+
+
+@pytest.mark.parametrize("mode", ["login", "register"])
+def test_auth_screens_offer_only_password_and_code(mode):
+    screen = AuthScreen(app=AuthOnlyApp(), name="auth")
+    screen.build(mode)
+    buttons = [widget.text for widget in screen.walk() if isinstance(widget, Action)]
+    assert not any("Google" in text for text in buttons)
+    assert ("Создать аккаунт" if mode == "register" else "Продолжить") in buttons
+
+
+@pytest.mark.parametrize("delivery", ["email", "development_file"])
+def test_verify_explains_actual_code_delivery(delivery):
+    screen = VerifyScreen(app=AuthOnlyApp(), name="verify")
+    screen.build({"challenge_id": "test-challenge-id", "delivery": delivery})
+    text = "\n".join(getattr(widget, "text", "") for widget in screen.walk())
+    assert "Письмо уже" not in text
+    assert "Google" not in text
+    if delivery == "development_file":
+        assert "Код сохранён локально" in text
+        assert "письма не отправляются" in text
+        assert "READ_CODE_WINDOWS.bat" in text
+        assert "CONFIGURE_EMAIL_WINDOWS.bat" in text
+        assert "Проверьте почту" not in text
+    else:
+        assert "Проверьте почту" in text
+        assert "Спам" in text
+        assert "READ_CODE_WINDOWS.bat" not in text
 
 
 def settle(app, seconds=0.15):
@@ -41,9 +79,13 @@ def test_all_screens_with_real_api(api_server, monkeypatch):
             "verify",
             "profile",
             "admin",
+            "connect",
         }
         app.go_auth()
         auth = app.screens["auth"]
+        assert not any(
+            "Google" in widget.text for widget in auth.walk() if isinstance(widget, Action)
+        )
         auth.build("register")
         for key, value in {
             "name": "Анна Москва",
@@ -56,6 +98,7 @@ def test_all_screens_with_real_api(api_server, monkeypatch):
         settle(app)
         assert app.manager.current == "verify"
         verify = app.screens["verify"]
+        assert verify.delivery == "development_file"
         verify.code.text = json.loads((mail / f"{verify.challenge}.json").read_text())["code"]
         click(verify, "Войти")
         settle(app)

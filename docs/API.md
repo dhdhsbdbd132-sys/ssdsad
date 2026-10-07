@@ -12,9 +12,6 @@ Base path: `/api`. Для JSON-запросов `Content-Type: application/json`
 | POST | `/auth/refresh` | Одноразовая ротация refresh |
 | POST | `/auth/logout` | Отзыв семейства сессии; 204 |
 | GET | `/auth/me` | Текущий пользователь |
-| GET | `/auth/oauth/start` | Начало Google OIDC / PKCE |
-| GET | `/auth/oauth/callback` | Обмен кода провайдера; HTML-подтверждение |
-| POST | `/auth/oauth/poll` | Одноразовое получение challenge мобильным клиентом |
 | GET | `/events` | Список, поиск, фильтры, страницы |
 | GET | `/events/{id}` | Запись |
 | POST | `/events` | Создание; 201 |
@@ -49,7 +46,7 @@ Base path: `/api`. Для JSON-запросов `Content-Type: application/json`
 
 ## Авторизация
 
-`register`: `name`, `email`, `password`, `role` (только `attendee`/`organizer`). `login`: `email`, `password`. Оба возвращают `challenge_id`, `expires_in=600`, `delivery=email`. Затем `verify`: `challenge_id`, шестизначный `code`. Токены выдаются только после подтверждения.
+`register`: `name`, `email`, `password`, `role` (только `attendee`/`organizer`). `login`: `email`, `password`. Оба возвращают `challenge_id`, `expires_in=600` и фактический способ доставки: `delivery=email` после успешного SMTP либо `delivery=development_file` для локального mailbox. Сам код API не возвращает. При ошибке SMTP — 503; создание пользователя и замена предыдущего challenge откатываются. Затем `verify`: `challenge_id`, шестизначный `code`. Токены выдаются только после подтверждения. Вход через Google и внешние `/auth/oauth/*` удалены.
 
 `refresh` принимает `{ "refresh_token": "..." }`; старый токен после успешного запроса использовать нельзя. Выход отзывает текущую сессию, включая ранее выданные access-токены.
 
@@ -75,7 +72,6 @@ Base path: `/api`. Для JSON-запросов `Content-Type: application/json`
 | 413 | Тело больше 64 KiB |
 | 429 | Лимит запросов; `Retry-After: 60` |
 | 500 | Внутренняя ошибка без раскрытия деталей |
-| 502 | Недоступен OAuth-провайдер |
-| 503 | Почта/OAuth не настроены или почта недоступна |
+| 503 | SMTP не настроен, отклонил письмо или недоступен |
 
 Валидация FastAPI нормализована с 422 на 400; схема OpenAPI соответствует фактическим ответам.

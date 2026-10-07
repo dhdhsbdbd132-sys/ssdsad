@@ -1,6 +1,7 @@
 """The sole data gateway. Tokens stay in memory, never on disk or in logs."""
 
 from urllib.parse import urlsplit
+from ipaddress import ip_address, ip_network
 import requests
 
 
@@ -11,22 +12,42 @@ class ApiError(Exception):
 
 
 class ApiClient:
-    def __init__(self, base_url="http://127.0.0.1:8000"):
-        self.base_url = self.validate_url(base_url)
+    def __init__(self, base_url="http://127.0.0.1:8000", allow_private_http=False):
+        self.allow_private_http = bool(allow_private_http)
+        self.base_url = self.validate_url(base_url, self.allow_private_http)
         self.session = requests.Session()
         self.access = self.refresh = None
         self.user = None
 
     @staticmethod
-    def validate_url(url):
+    def validate_url(url, allow_private_http=False):
         url = url.strip().rstrip("/")
-        p = urlsplit(url)
+        try:
+            p = urlsplit(url)
+            port = p.port
+        except ValueError:
+            raise ApiError("Проверьте адрес и порт сервера") from None
         if not p.hostname or p.username or p.password or p.query or p.fragment or p.path:
             raise ApiError("Укажите адрес сервера без пути, пароля и параметров")
+        if port == 0:
+            raise ApiError("Порт сервера должен быть от 1 до 65535")
+        private_http = False
+        if allow_private_http:
+            try:
+                address = ip_address(p.hostname)
+                private_http = address.version == 4 and any(
+                    address in ip_network(network)
+                    for network in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+                )
+            except ValueError:
+                pass
         if p.scheme != "https" and not (
-            p.scheme == "http" and p.hostname in {"localhost", "127.0.0.1", "10.0.2.2"}
+            p.scheme == "http"
+            and (p.hostname in {"localhost", "127.0.0.1", "10.0.2.2"} or private_http)
         ):
-            raise ApiError("Для удалённого сервера требуется HTTPS")
+            raise ApiError(
+                "Для удалённого сервера нужен HTTPS. Для ПК через Wi-Fi включите режим локальной сети и укажите его IP-адрес."
+            )
         return url
 
     def request(self, method, path, body=None, params=None, retry=True):

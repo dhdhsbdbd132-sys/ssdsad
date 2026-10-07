@@ -24,11 +24,15 @@ class AuthService:
             password_hash=passwords.hash(data.password),
             role=data.role,
         )
-        self.db.add(user)
-        self.db.flush()
-        challenge = self.challenge(user)
-        audit(self.db, user.id, "register", user.id)
-        self.db.commit()
+        try:
+            self.db.add(user)
+            self.db.flush()
+            challenge = self.challenge(user)
+            audit(self.db, user.id, "register", user.id)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
         return challenge
 
     def challenge(self, user):
@@ -46,8 +50,8 @@ class AuthService:
                 expires_at=utcnow() + timedelta(minutes=10),
             )
         )
-        self.mailer.send_code(user.email, cid, code)
-        return {"challenge_id": cid, "expires_in": 600, "delivery": "email"}
+        delivery = self.mailer.send_code(user.email, cid, code)
+        return {"challenge_id": cid, "expires_in": 600, "delivery": delivery}
 
     def login(self, data):
         user = self.users.by_email(str(data.email))
@@ -57,8 +61,12 @@ class AuthService:
             valid = False
         if not user or not valid or not user.active:
             raise AppError(401, "Неверная почта или пароль")
-        challenge = self.challenge(user)
-        self.db.commit()
+        try:
+            challenge = self.challenge(user)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
         return challenge
 
     def issue(self, user, family=None):
