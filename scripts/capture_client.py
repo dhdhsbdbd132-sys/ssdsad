@@ -58,6 +58,14 @@ def start(_):
             ("home", "moscow-map.png", lambda: None),
             ("auth", "login.png", app.go_auth),
             ("auth", "registration.png", lambda: app.screens["auth"].build("register")),
+            (
+                "verify",
+                "email-code.png",
+                lambda: app.go_verify(
+                    {"challenge_id": "preview-only-challenge", "delivery": "development_file"}
+                ),
+            ),
+            ("connect", "android-connect.png", connection_preview),
             ("profile", "profile.png", app.go_profile),
             ("list", "event-list.png", lambda: app.go_list("all")),
             ("detail", "event-detail.png", lambda: app.go_detail(app.events[0]["id"])),
@@ -70,6 +78,11 @@ def start(_):
 def small_home():
     Window.size = (360, 700)
     app.go_home()
+
+
+def connection_preview():
+    app.go_connect()
+    app.screens["connect"].server.text = ""
 
 
 Clock.schedule_once(start, 4)

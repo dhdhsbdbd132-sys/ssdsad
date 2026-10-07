@@ -101,6 +101,7 @@ class TodayGoApp(App):
         except ApiError:
             self.api = ApiClient()
             needs_connection = True
+        self.connection_required = needs_connection
         root = FloatLayout()
         self.backdrop = AmbientBackdrop()
         root.add_widget(self.backdrop)
@@ -253,6 +254,7 @@ class TodayGoApp(App):
         def connected(api):
             self.api.session.close()
             self.api = api
+            self.connection_required = False
             self.save_server()
             self.go_home()
 
@@ -276,6 +278,8 @@ class TodayGoApp(App):
         )
 
     def key(self, window, key, *_):
+        if key == 27 and self.manager.current == "connect" and self.connection_required:
+            return False
         if key == 27 and self.manager.current != "home":
             self.go_home()
             return True

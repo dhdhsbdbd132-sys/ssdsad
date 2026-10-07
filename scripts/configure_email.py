@@ -143,7 +143,7 @@ def main() -> int:
         )
     except ValidationError:
         print(
-            "Настройки SMTP некорректны. Проверьте сервер, порт и SSL/STARTTLS. Файл .env сохранён."
+            "Настройки SMTP некорректны. Проверьте сервер, порт и SSL/STARTTLS. Файл .env не изменён."
         )
         return 1
     # Explicit local choice: no connection or real message is sent before this prompt.

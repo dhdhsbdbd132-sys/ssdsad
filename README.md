@@ -8,7 +8,7 @@
 
 Версия 1.2: общий анимированный ночной фон с цветными переливами, световыми орбитами и мерцающими звёздами; плавное появление карточек и экранов, анимированные кнопки, поля и маркеры. На небольших экранах карта получает больше места; события открываются по маркерам и через афишу. Вход — пароль и почтовый код; Google-вход удалён. [Оформление и анимации](docs/DESIGN.md).
 
-[Анимации](docs/animated-design.gif) · [Вход](docs/login.png) · [Регистрация](docs/registration.png) · [Афиша](docs/event-list.png) · [Событие](docs/event-detail.png) · [Профиль](docs/profile.png) · [Окно 360 × 700](docs/moscow-small.png).
+[Анимации](docs/animated-design.gif) · [Вход](docs/login.png) · [Регистрация](docs/registration.png) · [Почтовый код](docs/email-code.png) · [Подключение](docs/android-connect.png) · [Афиша](docs/event-list.png) · [Событие](docs/event-detail.png) · [Профиль](docs/profile.png) · [Окно 360 × 700](docs/moscow-small.png).
 
 ## Windows: запуск двойным щелчком
 

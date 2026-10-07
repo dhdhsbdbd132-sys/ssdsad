@@ -113,7 +113,7 @@ function Expand-ProjectArchive([string] $ArchivePath, [string] $Stage) {
                 if ($null -ne $outputStream) { $outputStream.Dispose() }
                 $inputStream.Dispose()
             }
-            if ((Get-Item -LiteralPath $destination).Length -ne $entry.Length) { throw "Неполный файл в архиве: $relative" }
+            if ((Get-Item -LiteralPath $destination -Force).Length -ne $entry.Length) { throw "Неполный файл в архиве: $relative" }
             $files.Add($relative)
         }
         foreach ($required in @('START_WINDOWS.bat', 'CONFIGURE_EMAIL_WINDOWS.bat', 'README.md', 'pyproject.toml',

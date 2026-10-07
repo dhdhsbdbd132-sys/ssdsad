@@ -766,7 +766,8 @@ class VerifyScreen(BaseScreen):
                 Paragraph(
                     text=(
                         "Сейчас включён режим разработки: письма не отправляются. "
-                        "Откройте READ_CODE_WINDOWS.bat в папке проекта и найдите код для своей "
+                        "На компьютере с сервером откройте READ_CODE_WINDOWS.bat "
+                        "в папке проекта и найдите код для своей "
                         "почты. Чтобы включить отправку писем, запустите CONFIGURE_EMAIL_WINDOWS.bat."
                     ),
                     size=11,
@@ -810,7 +811,7 @@ class VerifyScreen(BaseScreen):
 class ConnectionScreen(BaseScreen):
     def build(self):
         self.reset()
-        self.header("Подключить приложение", back=False)
+        self.header("Подключить приложение", back=not self.app.connection_required)
         scroll, column = scroll_column(18)
         self.layout.add_widget(scroll)
         column.add_widget(
