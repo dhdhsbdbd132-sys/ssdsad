@@ -1,0 +1,2 @@
+# Keep cmd.exe line endings in GitHub source archives.
+*.bat -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
