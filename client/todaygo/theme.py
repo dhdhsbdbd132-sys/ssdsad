@@ -92,7 +92,8 @@ class Action(Button):
     fill = ListProperty(LIME)
     tint_rgba = ListProperty(LIME)
     hover = BooleanProperty(False)
-    press = NumericProperty(0)
+    # "press" would make Kivy call ButtonBehavior.on_press as a property handler.
+    press_progress = NumericProperty(0)
 
     def __init__(self, text, callback=None, secondary=False, danger=False, **kwargs):
         kwargs.setdefault("size_hint_y", None)
@@ -120,7 +121,12 @@ class Action(Button):
             self.rect = RoundedRectangle(radius=[dp(14)])
             self.border_color = Color(*STROKE[:3], 0.65 if secondary else 0)
             self.outline = Line(rounded_rectangle=(0, 0, 1, 1, dp(14)), width=1)
-        self.bind(pos=self.redraw, size=self.redraw, tint_rgba=self.redraw, press=self.redraw)
+        self.bind(
+            pos=self.redraw,
+            size=self.redraw,
+            tint_rgba=self.redraw,
+            press_progress=self.redraw,
+        )
         self.bind(state=self._state, fill=self._tint, hover=self._tint, parent=self._parent)
         self.bind(size=self._text_size)
         if callback:
@@ -139,8 +145,8 @@ class Action(Button):
             if self._hover_bound:
                 Window.unbind(mouse_pos=self._mouse)
                 self._hover_bound = False
-            Animation.cancel_all(self, "tint_rgba", "press")
-            self.press = 0
+            Animation.cancel_all(self, "tint_rgba", "press_progress")
+            self.press_progress = 0
             self.hover = False
 
     def _mouse(self, _, pos):
@@ -149,12 +155,12 @@ class Action(Button):
 
     def _state(self, *_):
         self._tint()
-        Animation.cancel_all(self, "press")
+        Animation.cancel_all(self, "press_progress")
         value = 1 if self.state == "down" else 0
         if reduced_motion():
-            self.press = value
+            self.press_progress = value
         else:
-            Animation(press=value, duration=0.12, t="out_quad").start(self)
+            Animation(press_progress=value, duration=0.12, t="out_quad").start(self)
 
     def _tint(self, *_):
         if not hasattr(self, "rect"):
@@ -169,7 +175,7 @@ class Action(Button):
     def redraw(self, *_):
         if not hasattr(self, "rect"):
             return
-        offset = dp(self.press)
+        offset = dp(self.press_progress)
         self.shadow.pos = (self.x, self.y - dp(2))
         self.shadow.size = self.size
         self.rect.pos = (self.x, self.y - offset)

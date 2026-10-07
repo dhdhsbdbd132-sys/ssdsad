@@ -18,7 +18,8 @@ def settle(app, seconds=0.15):
 
 def click(screen, text):
     button = next(w for w in screen.walk() if isinstance(w, Action) and w.text == text)
-    button.dispatch("on_release")
+    # Keep the pressed state for multiple frames so the press animation runs.
+    button.trigger_action(duration=0.10)
 
 
 def test_all_screens_with_real_api(api_server, monkeypatch):
