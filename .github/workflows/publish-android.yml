@@ -66,6 +66,8 @@ jobs:
           python publisher/scripts/publish_android_release.py verify
           --directory "$RUNNER_TEMP/todaygo-release-$GITHUB_RUN_ID"
           --source-directory "$GITHUB_WORKSPACE/build-source"
+      - name: Verify live Moscow map HTTPS with APK certificates
+        run: python publisher/scripts/verify_bundled_https.py "$RUNNER_TEMP/todaygo-release-$GITHUB_RUN_ID"
       - name: Upload draft assets and publish release
         env:
           GITHUB_TOKEN: ${{ github.token }}
