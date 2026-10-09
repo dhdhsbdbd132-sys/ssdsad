@@ -1,4 +1,4 @@
-# Read by START_WINDOWS.bat. No machine-wide ExecutionPolicy changes are needed.
+# Shared by the desktop, standalone demo, and Android server Windows launchers.
 $ErrorActionPreference = 'Stop'
 $project = $env:TODAYGO_PROJECT_ROOT
 $runtime = Join-Path $env:LOCALAPPDATA 'TodayGo\Python312'
@@ -21,6 +21,9 @@ function Find-Python312 {
 }
 
 try {
+    if ($env:TODAYGO_DEMO -eq '1' -and $env:TODAYGO_ANDROID_SERVER -eq '1') {
+        throw 'Standalone demo and Android server must be started separately.'
+    }
     $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
     if ($launcher) { $python = Find-Python312 -Executable $launcher.Source -Prefix @('-3.12') }
     if (-not $python) {
@@ -73,6 +76,9 @@ try {
     $launchArguments = @('-X', 'utf8', (Join-Path $project 'scripts\launch_windows.py'))
     if ($env:TODAYGO_ANDROID_SERVER -eq '1') {
         $launchArguments += '--android-server'
+    }
+    if ($env:TODAYGO_DEMO -eq '1') {
+        $launchArguments += '--demo'
     }
     & $python @launchArguments
     exit $LASTEXITCODE

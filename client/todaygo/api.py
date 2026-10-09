@@ -1,4 +1,4 @@
-"""The sole data gateway. Tokens stay in memory, never on disk or in logs."""
+"""HTTP data gateway. Tokens stay in memory, never on disk or in logs."""
 
 from urllib.parse import urlsplit
 from ipaddress import ip_address, ip_network
@@ -100,6 +100,9 @@ class ApiClient:
 
     def clear_tokens(self):
         self.access = self.refresh = self.user = None
+
+    def close(self):
+        self.session.close()
 
     def register(self, data):
         return self.request("POST", "/auth/register", data)

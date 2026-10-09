@@ -1,4 +1,4 @@
-"""Local desktop or Android API supervisor; also testable on Linux."""
+"""Local desktop, standalone demo, or Android API launcher; testable on Linux."""
 
 from __future__ import annotations
 
@@ -68,7 +68,9 @@ def command(args, *, env=None):
         )
 
 
-def prepare(android_server=False):
+def prepare(android_server=False, demo=False):
+    if android_server and demo:
+        raise RuntimeError("Демонстрация и сервер Android запускаются отдельно.")
     if sys.version_info[:2] != (3, 12) or sys.maxsize <= 2**32:
         raise RuntimeError("Требуется Python 3.12, 64-bit.")
     python = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -81,12 +83,19 @@ def prepare(android_server=False):
         venv.EnvBuilder(with_pip=True).create(VENV)
     digest = hashlib.sha256()
     digest.update(str(sys.version_info[:3]).encode())
-    requirements_files = REQUIREMENTS[:1] if android_server else REQUIREMENTS
+    requirements_files = (
+        REQUIREMENTS[1:] if demo else REQUIREMENTS[:1] if android_server else REQUIREMENTS
+    )
     for requirements in requirements_files:
         digest.update(requirements.read_bytes())
-    stamp = VENV / (
-        "todaygo-api-dependencies.sha256" if android_server else "todaygo-dependencies.sha256"
+    stamp_name = (
+        "todaygo-demo-dependencies.sha256"
+        if demo
+        else "todaygo-api-dependencies.sha256"
+        if android_server
+        else "todaygo-dependencies.sha256"
     )
+    stamp = VENV / stamp_name
     current = digest.hexdigest()
     if not stamp.is_file() or stamp.read_text(encoding="utf-8").strip() != current:
         print("Устанавливаем зависимости. Первый запуск может занять несколько минут…", flush=True)
@@ -187,9 +196,53 @@ def request_json(url):
         return json.load(response)
 
 
-def run(smoke=False, android_server=False):
+def run_demo(python, smoke=False):
+    """Launch only the local client; never read backend settings or start a server."""
+    print(
+        "Открываем тестовую версию без сервера и регистрации. "
+        "Демонстрационные данные сохраняются отдельно на этом компьютере.",
+        flush=True,
+    )
+    client_env = {
+        **os.environ,
+        "TODAYGO_DEMO": "1",
+        "KIVY_HOME": str(DATA / "kivy"),
+        "MESA_SHADER_CACHE_DIR": str(DATA / "mesa"),
+    }
+    if smoke:
+        code = """from kivy.clock import Clock
+from todaygo.application import TodayGoApp
+app=TodayGoApp()
+def check(_):
+    assert app.demo_mode, 'Kivy did not enter standalone demo mode'
+    assert not app.busy and len(app.events)>=6, 'Kivy did not load demo events'
+    app.root.export_to_png('.data/windows-demo-smoke.png')
+    app.stop()
+Clock.schedule_once(check,4)
+app.run()
+"""
+        client_env["PYTHONPATH"] = str(ROOT / "client")
+        args = [str(python), "-X", "utf8", "-c", code]
+    else:
+        args = [str(python), "-X", "utf8", str(ROOT / "client/main.py")]
+    client = None
+    try:
+        client = subprocess.Popen(args, cwd=ROOT, env=client_env)
+        if client.wait() != 0:
+            raise RuntimeError("Тестовая версия завершилась с ошибкой. Подробности показаны выше.")
+        print("Тестовая версия закрыта.", flush=True)
+    finally:
+        stop(client)
+
+
+def run(smoke=False, android_server=False, demo=False):
+    if android_server and demo:
+        raise RuntimeError("Демонстрация и сервер Android запускаются отдельно.")
     with launch_lock():
-        python = prepare(android_server=android_server)
+        python = prepare(android_server=android_server, demo=demo)
+        if demo:
+            run_demo(python, smoke=smoke)
+            return
         api_env = {**os.environ, "PYTHONPATH": str(ROOT / "backend")}
         # -X utf8 keeps file mail and Cyrillic data consistent across Windows locales.
         settings = json.loads(
@@ -351,22 +404,31 @@ app.run()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Сегодня идём — приложение или сервер Android")
+    parser = argparse.ArgumentParser(
+        description="Сегодня идём — приложение, тестовая версия или сервер Android"
+    )
     parser.add_argument(
         "--smoke-test",
         action="store_true",
-        help="Проверить реальный запуск Kivy и API, затем закрыть",
+        help="Проверить запуск Kivy в выбранном режиме, затем закрыть",
     )
     parser.add_argument(
         "--android-server",
         action="store_true",
         help="Запустить только API для телефона в локальной сети, без Kivy",
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Запустить тестовую версию с местными данными без API и регистрации",
+    )
     options = parser.parse_args()
     if options.smoke_test and options.android_server:
         parser.error("--smoke-test и --android-server используются отдельно")
+    if options.demo and options.android_server:
+        parser.error("--demo и --android-server используются отдельно")
     try:
-        run(smoke=options.smoke_test, android_server=options.android_server)
+        run(smoke=options.smoke_test, android_server=options.android_server, demo=options.demo)
     except KeyboardInterrupt:
         print("\nЗапуск остановлен.")
         sys.exit(130)

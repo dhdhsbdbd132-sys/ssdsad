@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from kivy.animation import Animation
@@ -63,6 +64,7 @@ class LoadingStrip(Widget):
 
 class TodayGoApp(App):
     title = "Сегодня идём"
+    demo_mode = False
 
     @property
     def user_data_dir(self):
@@ -92,16 +94,32 @@ class TodayGoApp(App):
                     saved = {}
             except (ValueError, OSError):
                 pass
+        self._settings = {
+            key: saved[key] for key in ("api_url", "allow_private_http", "mode") if key in saved
+        }
+        wants_demo = os.environ.get("TODAYGO_DEMO") == "1" or saved.get("mode") == "demo"
         base = os.environ.get("TODAYGO_API_URL", saved.get("api_url", "http://127.0.0.1:8000"))
         needs_connection = platform == "android" and not (
             saved.get("api_url") or os.environ.get("TODAYGO_API_URL")
         )
-        try:
-            self.api = ApiClient(base, allow_private_http=saved.get("allow_private_http", False))
-        except ApiError:
-            self.api = ApiClient()
-            needs_connection = True
+        self.demo_mode = False
+        if wants_demo:
+            from todaygo.demo import DemoClient
+
+            self.api = DemoClient(Path(self.user_data_dir) / "demo/events.json")
+            self.demo_mode = True
+            self.map_offline = True
+            needs_connection = False
+        else:
+            try:
+                self.api = ApiClient(
+                    base, allow_private_http=saved.get("allow_private_http", False)
+                )
+            except ApiError:
+                self.api = ApiClient()
+                needs_connection = True
         self.connection_required = needs_connection
+        self.map_offline = self.map_offline or needs_connection
         root = FloatLayout()
         self.backdrop = AmbientBackdrop()
         root.add_widget(self.backdrop)
@@ -233,8 +251,89 @@ class TodayGoApp(App):
         self.switch("profile")
 
     def go_connect(self):
+        if self.demo_mode:
+            self.leave_demo()
+            return
         self.screens["connect"].build()
         self.switch("connect")
+
+    def _write_settings(self, values):
+        destination = Path(self.user_data_dir) / "settings.json"
+        temporary = None
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                dir=destination.parent,
+                prefix=".settings-",
+                mode="w",
+                encoding="utf-8",
+                delete=False,
+            ) as output:
+                temporary = output.name
+                json.dump(values, output, ensure_ascii=False)
+            os.replace(temporary, destination)
+        except OSError:
+            raise ApiError("Не удалось сохранить настройки устройства") from None
+        finally:
+            if temporary:
+                try:
+                    Path(temporary).unlink(missing_ok=True)
+                except OSError:
+                    pass
+        self._settings = values
+
+    def _change_mode(self, api, demo):
+        self.api.clear_tokens()
+        self.api.close()
+        self.api = api
+        self.demo_mode = demo
+        # The connection screen must not start hidden online tile downloads.
+        self.map_offline = True
+        self.connection_required = not demo
+        self.events = []
+        for screen in self.screens.values():
+            screen.reset()
+        self.screens["home"].category = "all"
+        self.screens["home"].build()
+
+    def start_demo(self):
+        if self.busy or self._stopping or self.demo_mode:
+            return
+        from todaygo.demo import DemoClient
+
+        try:
+            candidate = DemoClient(Path(self.user_data_dir) / "demo/events.json")
+            self._write_settings({**self._settings, "mode": "demo"})
+        except ApiError as error:
+            self.notice(str(error))
+            return
+        self._change_mode(candidate, True)
+        self.go_home()
+
+    def leave_demo(self):
+        if self.busy or self._stopping or not self.demo_mode:
+            return
+        settings = {key: value for key, value in self._settings.items() if key != "mode"}
+        try:
+            candidate = ApiClient(
+                settings.get("api_url", "http://127.0.0.1:8000"),
+                allow_private_http=settings.get("allow_private_http", False),
+            )
+        except ApiError:
+            candidate = ApiClient()
+        try:
+            self._write_settings(settings)
+        except ApiError as error:
+            candidate.close()
+            self.notice(str(error))
+            return
+        self._change_mode(candidate, False)
+        self.go_connect()
+
+    def demo_login(self):
+        if self.demo_mode:
+            self.api.login_demo()
+            self.go_home()
 
     def connect_server(self, url, allow_private_http=False):
         if self.api.user:
@@ -252,10 +351,19 @@ class TodayGoApp(App):
             return candidate
 
         def connected(api):
-            self.api.session.close()
+            try:
+                self._write_settings(
+                    {"api_url": api.base_url, "allow_private_http": api.allow_private_http}
+                )
+            except ApiError as error:
+                api.close()
+                self.notice(str(error))
+                return
+            self.api.close()
             self.api = api
             self.connection_required = False
-            self.save_server()
+            self.map_offline = os.environ.get("TODAYGO_MAP_MODE") == "offline"
+            self.screens["home"].build()
             self.go_home()
 
         self.run_api(check, connected)
@@ -267,14 +375,13 @@ class TodayGoApp(App):
         )
 
     def logout(self):
-        self.run_api(self.api.logout, lambda _: self.go_home())
+        self.run_api(
+            self.api.logout, lambda _: self.go_auth() if self.demo_mode else self.go_home()
+        )
 
     def save_server(self):
-        (Path(self.user_data_dir) / "settings.json").write_text(
-            json.dumps(
-                {"api_url": self.api.base_url, "allow_private_http": self.api.allow_private_http}
-            ),
-            encoding="utf-8",
+        self._write_settings(
+            {"api_url": self.api.base_url, "allow_private_http": self.api.allow_private_http}
         )
 
     def key(self, window, key, *_):
@@ -297,6 +404,7 @@ class TodayGoApp(App):
         self._start_event.cancel()
         self.backdrop.dispose()
         self.api.clear_tokens()
+        self.api.close()
         self.status.active = False
         Window.unbind(on_keyboard=self.key)
         from todaygo.maps import MapPanel

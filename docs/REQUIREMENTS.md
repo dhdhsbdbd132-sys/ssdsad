@@ -14,7 +14,7 @@
 | JSON и Pydantic | Входные/выходные модели, запрет неизвестных полей |
 | Ошибки 400/401/404/500 | Единый обработчик и автоматические проверки |
 | Swagger / OpenAPI | `/docs`, `/openapi.json`, схемы и авторизация |
-| Все действия Kivy через API | Единственный `ApiClient`, без доступа к БД |
+| Все действия Kivy через API | В основном режиме — `ApiClient`, без доступа к БД; отдельное локальное демо работает без сервера |
 | Реляционная БД | SQLite development, PostgreSQL production, миграции |
 | DeclarativeBase / Mapped / mapped_column | `backend/app/core/db.py`, `backend/app/models.py` |
 | Session / select / ForeignKey / relationship | ORM-репозитории, связи и каскады |
@@ -26,6 +26,7 @@
 | Refresh token | Хеширование, ротация, TTL, replay detection, logout |
 | Защита инфраструктуры | TLS-прокси, rate limits, headers, non-root/read-only Docker |
 | Android | APK для Android 7+ ARM64, проверка подписи/библиотек и прямой файл в GitHub Releases; подключение к Windows API через Wi-Fi |
+| Тестовая версия без сервера | `DemoClient`, локальные CRUD/участие/поиск, готовый аккаунт, офлайн-карта, отдельный Windows launcher; новый APK не собирался |
 
 ## Из исходных документов
 

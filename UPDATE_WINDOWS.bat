@@ -63,7 +63,7 @@ function Expand-ProjectArchive([string] $ArchivePath, [string] $Stage) {
         $allowedRootFiles = @('.dockerignore', '.env.example', '.gitattributes', '.gitignore',
             'README.md', 'pyproject.toml', 'START_WINDOWS.bat', 'READ_CODE_WINDOWS.bat',
             'REPAIR_WINDOWS.bat', 'UPDATE_WINDOWS.bat', 'CONFIGURE_EMAIL_WINDOWS.bat',
-            'START_ANDROID_SERVER_WINDOWS.bat')
+            'START_ANDROID_SERVER_WINDOWS.bat', 'START_DEMO_WINDOWS.bat')
         $allowedDirectories = @('backend', 'client', 'scripts', 'docs', 'deploy', '.github')
         $files = [System.Collections.Generic.List[string]]::new()
         $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)

@@ -228,6 +228,7 @@ class HomeScreen(BaseScreen):
 
     def build(self):
         self.reset()
+        demo = getattr(self.app, "demo_mode", False)
         header = BoxLayout(
             size_hint_y=None, height=dp(64), padding=(dp(20), dp(10)), spacing=dp(12)
         )
@@ -239,8 +240,10 @@ class HomeScreen(BaseScreen):
         intro.add_widget(
             Hero(
                 "Москва зовёт.",
-                "Выбирайте место. Находите своих.",
-                eyebrow="ГОРОД ПОЛОН ВОЗМОЖНОСТЕЙ",
+                "Тестовые события на вашем устройстве."
+                if demo
+                else "Выбирайте место. Находите своих.",
+                eyebrow="ДЕМО · БЕЗ СЕРВЕРА" if demo else "ГОРОД ПОЛОН ВОЗМОЖНОСТЕЙ",
                 height=110,
                 compact=True,
             )
@@ -275,7 +278,7 @@ class HomeScreen(BaseScreen):
         filters.add_widget(chips)
         self.layout.add_widget(filters)
         map_wrap = BoxLayout(padding=(dp(20), dp(6)))
-        self.map_panel = MapPanel()
+        self.map_panel = MapPanel(forced_offline=self.app.map_offline)
         map_wrap.add_widget(self.map_panel)
         self.layout.add_widget(map_wrap)
         heading = BoxLayout(size_hint_y=None, height=dp(42), padding=(dp(20), dp(4)))
@@ -498,7 +501,7 @@ class DetailScreen(BaseScreen):
         )
         column.add_widget(summary)
         column.add_widget(section("Место встречи", event["address"]))
-        mp = MapPanel(size_hint_y=None, height=dp(260))
+        mp = MapPanel(forced_offline=self.app.map_offline, size_hint_y=None, height=dp(260))
         mp.focus(event["latitude"], event["longitude"], zoom=14)
         mp.map.display_events([event], lambda *_: None)
         column.add_widget(mp)
@@ -613,7 +616,12 @@ class FormScreen(BaseScreen):
         column.add_widget(timing)
         self.coords = (values.get("latitude", MOSCOW[0]), values.get("longitude", MOSCOW[1]))
         column.add_widget(section("03  Точка на карте", "Нажмите на карту, чтобы выбрать место."))
-        self.mp = MapPanel(on_pick=self.pick, size_hint_y=None, height=dp(290))
+        self.mp = MapPanel(
+            on_pick=self.pick,
+            forced_offline=self.app.map_offline,
+            size_hint_y=None,
+            height=dp(290),
+        )
         self.mp.map.picking = True
         self.mp.focus(*self.coords)
         column.add_widget(self.mp)
@@ -669,6 +677,35 @@ class AuthScreen(BaseScreen):
         self.header("Добро пожаловать")
         scroll, column = scroll_column(16)
         self.layout.add_widget(scroll)
+        self.fields = {}
+        if getattr(self.app, "demo_mode", False):
+            column.add_widget(
+                Hero(
+                    "Попробуйте\nсвою Москву.",
+                    "Всё работает на этом устройстве.",
+                    eyebrow="ДЕМО · БЕЗ СЕРВЕРА",
+                    height=204,
+                    category="culture",
+                )
+            )
+            card = form_card()
+            card.add_widget(section("Тестовый организатор"))
+            card.add_widget(
+                Paragraph(
+                    text=(
+                        "Пароль и код из письма не нужны. Создавайте события, "
+                        "редактируйте их и пробуйте участие. Изменения сохраняются "
+                        "на этом устройстве."
+                    ),
+                    size=12,
+                    color=MUTED,
+                )
+            )
+            card.add_widget(Action("Войти в тестовую версию", self.app.demo_login))
+            card.add_widget(Action("Подключиться к серверу", self.app.leave_demo, secondary=True))
+            column.add_widget(card)
+            enter(card, offset=0)
+            return
         column.add_widget(
             Hero(
                 "Москва ближе,\nчем кажется.",
@@ -686,7 +723,6 @@ class AuthScreen(BaseScreen):
                 "Ваш следующий хороший вечер начинается здесь.",
             )
         )
-        self.fields = {}
         if mode == "register":
             self.fields["name"] = labeled_field(card, "Как вас зовут?", "Ваше имя")
         self.fields["email"] = labeled_field(card, "Электронная почта", "you@example.com")
@@ -722,6 +758,9 @@ class AuthScreen(BaseScreen):
         enter(card, offset=0)
 
     def submit(self):
+        if getattr(self.app, "demo_mode", False):
+            self.app.demo_login()
+            return
         email, password = self.fields["email"].text.strip(), self.fields["password"].text
         if self.mode == "register":
             data = {
@@ -814,6 +853,20 @@ class ConnectionScreen(BaseScreen):
         self.header("Подключить приложение", back=not self.app.connection_required)
         scroll, column = scroll_column(18)
         self.layout.add_widget(scroll)
+        demo = form_card()
+        demo.add_widget(section("Попробуйте без подключения"))
+        demo.add_widget(
+            Paragraph(
+                text=(
+                    "Тестовые события, карта Москвы и создание встреч — без сервера, "
+                    "пароля и писем. Данные сохраняются только на этом устройстве."
+                ),
+                size=11,
+                color=MUTED,
+            )
+        )
+        demo.add_widget(Action("Открыть тестовую версию", self.app.start_demo))
+        column.add_widget(demo)
         column.add_widget(
             Hero(
                 "Москва\nв вашем кармане.",
@@ -865,7 +918,8 @@ class ConnectionScreen(BaseScreen):
 class ProfileScreen(BaseScreen):
     def build(self):
         self.reset()
-        self.header("Профиль", back=False)
+        demo = getattr(self.app, "demo_mode", False)
+        self.header("ДЕМО · БЕЗ СЕРВЕРА" if demo else "Профиль", back=False)
         scroll, column = scroll_column()
         self.layout.add_widget(scroll)
         user = self.app.api.user
@@ -876,7 +930,15 @@ class ProfileScreen(BaseScreen):
             identity.add_widget(Avatar(initials, size=62))
             info = BoxLayout(orientation="vertical")
             info.add_widget(Copy(text=user["name"], size=21, bold=True, height=34, shorten=True))
-            info.add_widget(Copy(text=user["email"], size=11, color=MUTED, height=26, shorten=True))
+            info.add_widget(
+                Copy(
+                    text="Локальный тестовый аккаунт" if demo else user["email"],
+                    size=11,
+                    color=MUTED,
+                    height=26,
+                    shorten=True,
+                )
+            )
             identity.add_widget(info)
             card.add_widget(identity)
             card.add_widget(Badge(ROLES[user["role"]], category="sport"))
@@ -903,19 +965,43 @@ class ProfileScreen(BaseScreen):
             column.add_widget(
                 Hero(
                     "Ваш город.\nВаши люди.",
-                    "Войдите, чтобы сохранять встречи и создавать свои.",
-                    eyebrow="ВАШ МАЛЕНЬКИЙ БОЛЬШОЙ ГОРОД",
+                    "Вернитесь в локальный тестовый аккаунт."
+                    if demo
+                    else "Войдите, чтобы сохранять встречи и создавать свои.",
+                    eyebrow="ДЕМО · БЕЗ СЕРВЕРА" if demo else "ВАШ МАЛЕНЬКИЙ БОЛЬШОЙ ГОРОД",
                     height=214,
                     category="culture",
                 )
             )
-            column.add_widget(Action("Войти или зарегистрироваться", self.app.go_auth))
+            column.add_widget(
+                Action(
+                    "Войти в тестовую версию" if demo else "Войти или зарегистрироваться",
+                    self.app.go_auth,
+                )
+            )
         connection = form_card()
-        connection.add_widget(section("Подключение", "Адрес сервера для этого устройства."))
-        connection.add_widget(Paragraph(text=self.app.api.base_url, size=11, color=MUTED))
-        connection.add_widget(
-            Action("Подключить другой сервер", self.app.go_connect, secondary=True)
-        )
+        if demo:
+            connection.add_widget(section("Тестовая версия"))
+            connection.add_widget(
+                Paragraph(
+                    text=(
+                        "Это тестовые мероприятия и локальный аккаунт. Сервер и "
+                        "почта не используются. Изменения сохраняются на этом "
+                        "устройстве: телефон и компьютер хранят свои данные отдельно."
+                    ),
+                    size=11,
+                    color=MUTED,
+                )
+            )
+            connection.add_widget(
+                Action("Подключиться к серверу", self.app.leave_demo, secondary=True)
+            )
+        else:
+            connection.add_widget(section("Подключение", "Адрес сервера для этого устройства."))
+            connection.add_widget(Paragraph(text=self.app.api.base_url, size=11, color=MUTED))
+            connection.add_widget(
+                Action("Подключить другой сервер", self.app.go_connect, secondary=True)
+            )
         column.add_widget(connection)
         column.add_widget(
             Paragraph(

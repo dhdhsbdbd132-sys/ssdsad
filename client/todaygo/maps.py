@@ -151,7 +151,7 @@ class MoscowMap(MapView):
     map_status = StringProperty("Подключаем карту…")
     attribution = StringProperty("Схема Москвы · не для навигации")
 
-    def __init__(self, on_pick=None, **kwargs):
+    def __init__(self, on_pick=None, forced_offline=None, **kwargs):
         app = App.get_running_app()
         cache = Path(app.user_data_dir if app else ".data") / "map-cache"
         cache.mkdir(parents=True, exist_ok=True)
@@ -163,7 +163,11 @@ class MoscowMap(MapView):
         self._disposed = False
         self._geometry_trigger = Clock.create_trigger(self.recenter_after_layout, 0)
         self._switch_pending = False
-        self._forced_offline = os.environ.get("TODAYGO_MAP_MODE") == "offline"
+        self._forced_offline = (
+            os.environ.get("TODAYGO_MAP_MODE") == "offline"
+            if forced_offline is None
+            else bool(forced_offline)
+        )
         super().__init__(
             lat=MOSCOW[0],
             lon=MOSCOW[1],
@@ -376,7 +380,7 @@ def _floating_surface(widget, radius=12):
 
 
 class MapPanel(FloatLayout):
-    def __init__(self, on_pick=None, **kwargs):
+    def __init__(self, on_pick=None, forced_offline=None, **kwargs):
         super().__init__(**kwargs)
         # Nested stencil instructions preserve MapView's own clipping while rounding
         # the whole map and its floating controls to match the surrounding cards.
@@ -391,7 +395,9 @@ class MapPanel(FloatLayout):
             Color(*STROKE)
             self.border = Line(rounded_rectangle=(*self.pos, *self.size, dp(22)), width=dp(0.8))
         self.bind(pos=self.redraw_clip, size=self.redraw_clip)
-        self.map = MoscowMap(on_pick=on_pick, pos_hint={"x": 0, "y": 0})
+        self.map = MoscowMap(
+            on_pick=on_pick, forced_offline=forced_offline, pos_hint={"x": 0, "y": 0}
+        )
         self.focus_center = MOSCOW
         Clock.schedule_once(lambda _: self.map.center_on(*self.focus_center), 0.35)
         self.add_widget(self.map)
