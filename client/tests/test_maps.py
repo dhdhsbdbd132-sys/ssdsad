@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 import requests
 from kivy.base import EventLoop
+from kivy.clock import Clock
 from kivy.core.window import Window
 
 from todaygo.maps import MapPanel, MoscowMap, ObservedSource
@@ -229,11 +230,22 @@ def test_home_map_keeps_its_center_after_detail_navigation_and_window_resize(mon
     EventLoop.window.add_widget(app.root)
 
     def settle():
-        deadline = time.monotonic() + 0.5
-        while time.monotonic() < deadline or app.busy or app.manager.transition.is_active:
+        deadline = time.monotonic() + 4
+        clock_deadline = Clock.get_time() + 0.5
+        while (
+            Clock.get_time() < clock_deadline
+            or app.busy
+            or app._start_event.is_triggered
+            or app.manager.transition.is_active
+            or any(
+                w.map._geometry_trigger.is_triggered
+                for w in app.root.walk()
+                if isinstance(w, MapPanel)
+            )
+        ):
             EventLoop.idle()
             time.sleep(0.01)
-            assert time.monotonic() < deadline + 3
+            assert time.monotonic() < deadline
 
     try:
         settle()

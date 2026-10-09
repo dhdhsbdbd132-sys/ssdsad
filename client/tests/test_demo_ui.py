@@ -4,6 +4,7 @@ import json
 import time
 
 from kivy.base import EventLoop
+from kivy.clock import Clock
 from kivy.uix.popup import Popup
 import requests
 
@@ -15,11 +16,23 @@ from todaygo.theme import Action, Field
 
 
 def settle(app, seconds=0.18):
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline or app.busy:
+    deadline = time.monotonic() + 8
+    clock_deadline = Clock.get_time() + seconds
+    while (
+        Clock.get_time() < clock_deadline
+        or app.busy
+        or app._start_event.is_triggered
+        or app.manager.transition.is_active
+        or any(
+            w.map._geometry_trigger.is_triggered
+            or any(pin.width == 0 or pin.height == 0 for pin in w.map.event_markers)
+            for w in app.root.walk()
+            if isinstance(w, MapPanel)
+        )
+    ):
         EventLoop.idle()
         time.sleep(0.01)
-        if time.monotonic() > deadline + 8:
+        if time.monotonic() > deadline:
             raise AssertionError("Offline UI operation did not finish")
 
 

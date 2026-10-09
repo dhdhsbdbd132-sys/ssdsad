@@ -2,9 +2,10 @@ import json
 import time
 import pytest
 from kivy.base import EventLoop
+from kivy.clock import Clock
 from kivy.core.window import Window
 from todaygo.application import TodayGoApp
-from todaygo.maps import MOSCOW
+from todaygo.maps import MOSCOW, MapPanel
 from todaygo.theme import Action
 from todaygo.screens import AuthScreen, VerifyScreen
 
@@ -46,11 +47,23 @@ def test_verify_explains_actual_code_delivery(delivery):
 
 
 def settle(app, seconds=0.15):
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline or app.busy:
+    deadline = time.monotonic() + 10
+    clock_deadline = Clock.get_time() + seconds
+    while (
+        Clock.get_time() < clock_deadline
+        or app.busy
+        or app._start_event.is_triggered
+        or app.manager.transition.is_active
+        or any(
+            w.map._geometry_trigger.is_triggered
+            or any(pin.width == 0 or pin.height == 0 for pin in w.map.event_markers)
+            for w in app.root.walk()
+            if isinstance(w, MapPanel)
+        )
+    ):
         EventLoop.idle()
         time.sleep(0.01)
-        if time.monotonic() > deadline + 10:
+        if time.monotonic() > deadline:
             raise AssertionError("UI operation did not complete")
 
 

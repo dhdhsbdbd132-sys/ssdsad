@@ -316,9 +316,10 @@ try {
     if ((Get-Item -LiteralPath $archivePath).Length -gt 67108864) { throw 'Скачанный архив превышает допустимый размер.' }
     Update-ProjectFromZip $project $archivePath $stage
     Write-Host 'Обновление завершено.' -ForegroundColor Green
-    Write-Host "1. Откройте CONFIGURE_EMAIL_WINDOWS.bat в папке: $project"
-    Write-Host '2. Введите адрес Mail.ru и пароль приложения локально в открывшемся окне.'
-    Write-Host '3. После настройки запустите START_WINDOWS.bat в той же папке.'
+    Write-Host 'Тестовая версия без сервера: запустите START_DEMO_WINDOWS.bat.'
+    Write-Host 'Вход автоматический, настраивать почту не нужно.'
+    Write-Host 'Версия с сервером: настройте Mail.ru через CONFIGURE_EMAIL_WINDOWS.bat.'
+    Write-Host "Затем запустите START_WINDOWS.bat. Папка проекта: $project"
     $exitCode = 0
 }
 catch {
